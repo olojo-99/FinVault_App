@@ -1,5 +1,7 @@
 # FinVault Hackathon Boilerplate
 
+https://hackathon-helper--benjolo-dev.replit.app/login
+
 Welcome to the **FinVault** Hackathon! This is a "production-ready" personal finance and banking application. It looks polished, but it has some deep-seated issues that you need to find and fix, along with some features to build.
 
 ## Project Overview
