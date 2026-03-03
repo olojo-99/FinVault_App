@@ -1,0 +1,2612 @@
+I am hosting a hackathon for secondary school-level students at the large tech bank I work in. The format of the hackathon will be as follows: there will be a project with a base repository that is a fullstack web application for a personal finance and banking. It should have the core features usually involved in a personal finance and banking application.
+
+
+The web application should have a lightweight front end but have an elegant and productionised UI as well as a fully functional backend server preferably written in python maybe fast API would be the best for this or you could use Flask and upgrade in the challenges. The hackathon will feature three fix challenges and two feature implementations as part of the GitHub issues. These will all be triggered as issues in the GitHub and released every couple hours to participants there will be three core problems put in the web application that participants need to fix based on the release issues so there should be three deep technical issues that are not immediately obvious or straightforward and require some deep analysis with Copilot or AI so you should create the web application with three deeply integrated issues that they would have to assess analyse and fix so there should be issues like a race conditions or high latency on request to different API’s or even very slow SQL queries that need to be improved and already have integrated unit test timing their execution, there should also be two features to implement like a personal finances dashboard or maybe an analyitcs dashboard with some aggregation of calculations laid out to implement. So your job is essentially to build this fully comprehensive personal finance and banking application with three core issues deeply integrated and e2e tests to assess their functionality and completion like I have requested and 2 feature implementation opportunities.
+
+Even though the application will not be complete it should still run fully locally and look like a fully functional application just with some broken parts and some extended features to be implemented.
+
+The entire hackathon will take place over three to four hours so the challenges and features should be difficult. Participants should spend that time even when being completed with AI. One of the features should involve but not be limited to properly implementing a database with the needed migrations stored in repo using something like alembic.
+
+TECHNICAL PLAN:
+
+***
+
+# FinVault Hackathon — Full Project Blueprint
+
+**FinVault** is a personal finance and banking web application that runs fully locally on Replit. It *looks* complete and polished, but contains three deeply embedded bugs that require genuine investigation and two partially stubbed features to implement. The entire project is structured around GitHub Issues released on a timer throughout a 3–4 hour session.
+
+***
+
+## Tech Stack
+
+| Layer | Technology | Why |
+|---|---|---|
+| Frontend | HTML + Tailwind CSS (CDN) + Alpine.js (CDN) + Chart.js (CDN) | Zero build step on Replit, elegant UI, reactive without React overhead |
+| Backend | FastAPI + Uvicorn (Python) | Modern async Python, auto-generated docs at `/docs`, easy for Copilot |
+| ORM | SQLAlchemy 2.0 (async) | Industry standard, supports async properly |
+| Database | SQLite (local) → PostgreSQL-ready | Zero config for Replit, Alembic handles migration portability |
+| Migrations | Alembic | Version-controlled schema history stored in repo |
+| Auth | python-jose (JWT) + passlib (bcrypt) | Standard JWT access/refresh token pattern |
+| Testing | pytest + pytest-asyncio + httpx | Async-capable test suite with built-in timing assertions |
+
+***
+
+## Project Structure
+
+```
+finvault/
+├── backend/
+│   ├── app/
+│   │   ├── main.py                    # FastAPI app entry point, CORS, router registration
+│   │   ├── database.py                # Async SQLAlchemy engine + session factory
+│   │   ├── models/
+│   │   │   ├── user.py                # User model (id, email, hashed_password, created_at)
+│   │   │   ├── account.py             # Account model (id, user_id, type, balance, name)
+│   │   │   ├── transaction.py         # Transaction model (id, account_id, amount, category_id, type, date, description)
+│   │   │   ├── category.py            # Category model (id, name, icon, colour_hex)
+│   │   │   ├── budget.py              # Budget model (id, user_id, category_id, limit_amount, period)
+│   │   │   └── refresh_token.py       # RefreshToken model (id, user_id, token, is_revoked, created_at)
+│   │   ├── routers/
+│   │   │   ├── auth.py                # /login, /register, /refresh, /logout
+│   │   │   ├── accounts.py            # /accounts, /accounts/{id}
+│   │   │   ├── transactions.py        # /transactions/{account_id}  ← BUG #2 lives here
+│   │   │   ├── transfer.py            # /transfer                   ← BUG #1 lives here
+│   │   │   ├── budgets.py             # /budgets CRUD
+│   │   │   └── analytics.py           # STUB — Feature #1 to implement
+│   │   ├── services/
+│   │   │   └── transfer_service.py    # Core transfer logic ← BUG #1 lives here
+│   │   ├── middleware/
+│   │   │   └── auth_middleware.py     # JWT validation + blacklist ← BUG #3 lives here
+│   │   └── schemas/                   # Pydantic request/response schemas (one per router)
+│   ├── alembic/
+│   │   ├── env.py
+│   │   ├── alembic.ini
+│   │   └── versions/
+│   │       ├── 001_initial_schema.py          # Full working migration
+│   │       └── 002_add_savings_goals.py       # STUB — Feature #2 to complete
+│   ├── tests/
+│   │   ├── test_transfer_race.py              # Fails due to BUG #1
+│   │   ├── test_transaction_performance.py    # Fails due to BUG #2
+│   │   └── test_auth_security.py              # Fails due to BUG #3
+│   ├── seed.py                                # Seeds 3 users, 500+ transactions, budgets
+│   └── requirements.txt
+├── frontend/
+│   ├── index.html                     # Single HTML shell, Tailwind + Alpine + Chart.js via CDN
+│   └── src/
+│       ├── app.js                     # Alpine.js app root, routing, auth state
+│       ├── api.js                     # Centralised fetch wrapper (handles JWT headers)
+│       └── pages/
+│           ├── dashboard.js           # Account overview, recent transactions
+│           ├── transactions.js        # Full transaction list with filters
+│           ├── transfer.js            # Transfer funds form
+│           ├── budgets.js             # Budget management UI
+│           ├── analytics.js           # STUB — Feature #1 UI scaffold
+│           └── savings.js             # STUB — Feature #2 UI scaffold
+├── .env.example
+├── start.sh                           # Single command: alembic upgrade head && python seed.py && uvicorn
+└── README.md                          # Setup instructions + demo credentials
+```
+
+***
+
+## Core Application Features (Working on Day Zero)
+
+These all function correctly from the start, giving participants a believable, running application to explore:
+
+- **Authentication** — Register, login, logout, persistent JWT sessions stored in `localStorage`, protected routes
+- **Multi-account Dashboard** — Overview card per account (Checking, Savings, Credit), total net worth calculation
+- **Transaction History** — Full paginated list, filterable by date range, category, and transaction type (credit/debit)
+- **Fund Transfers** — Transfer between own accounts or to another user by email
+- **Budget Management** — Create category budgets with monthly/weekly periods, view remaining allowance
+- **Seed Data** — 3 demo users (`alice@finvault.io`, `bob@finvault.io`, `charlie@finvault.io`, all password `demo1234`), each with 2–3 accounts, 400–600 seeded transactions across 12 categories, spanning 12 months
+
+***
+
+## 🐛 Bug Challenge 1 — Race Condition on Fund Transfer
+
+**GitHub Issue Title**: `[BUG] Concurrent transfers causing account overdrafts — balance going negative`
+
+**Released**: T+0 (at hackathon start)
+
+**What participants observe**: Running the provided test produces accounts with negative balances. Manually triggering two rapid transfers from the same account can overdraft it. The `GET /accounts/{id}` endpoint shows a balance of `-€120` on an account that started at `€100`.
+
+**Where the bug lives** — `backend/app/services/transfer_service.py`:
+
+```python
+# ❌ BUGGY: Classic check-then-act race condition
+async def transfer_funds(from_id: int, to_id: int, amount: float, db: AsyncSession):
+    from_acct = await db.get(Account, from_id)       # READ
+    to_acct   = await db.get(Account, to_id)
+
+    if from_acct.balance < amount:
+        raise HTTPException(status_code=400, detail="Insufficient funds")
+
+    # ⚠️ Another concurrent request reads the same balance here
+    await asyncio.sleep(0.008)  # Simulates real processing latency
+
+    from_acct.balance -= amount   # WRITE (too late — balance already stale)
+    to_acct.balance   += amount
+    await db.commit()
+```
+
+The `asyncio.sleep` is intentionally placed mid-operation to widen the race window and make it reliably reproducible without needing extreme concurrency. [kingtigerebooks.co](https://kingtigerebooks.co.uk/post/race-condition-using-fast-api-sql-alchemy-and-asyncpg)
+
+**The test** — `tests/test_transfer_race.py`:
+
+```python
+import asyncio, pytest
+import httpx
+from app.main import app
+
+@pytest.mark.asyncio
+async def test_concurrent_transfers_no_overdraft():
+    """Account starts at €100. Ten concurrent €20 transfers are fired.
+    Only 5 should succeed. Final balance must be ≥ 0."""
+    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+        token = await login(client, "alice@finvault.io")
+        tasks = [
+            client.post("/api/transfer",
+                json={"from_account_id": 1, "to_account_id": 2, "amount": 20.0},
+                headers={"Authorization": f"Bearer {token}"}
+            ) for _ in range(10)
+        ]
+        responses = await asyncio.gather(*tasks)
+
+    final_balance = await get_balance(1)
+    assert final_balance >= 0, \
+        f"Race condition: balance is {final_balance} — overdraft occurred"
+    
+    successes = sum(1 for r in responses if r.status_code == 200)
+    assert successes == 5, f"Expected 5 successful transfers, got {successes}"
+```
+
+**The fix** — participants must implement row-level locking using SQLAlchemy's `with_for_update()` inside an atomic transaction, preventing any other session from reading the same row between the SELECT and the UPDATE:
+
+```python
+# ✅ FIXED: Atomic SELECT FOR UPDATE within a transaction
+async with db.begin():
+    from_acct = (await db.execute(
+        select(Account).where(Account.id == from_id).with_for_update()
+    )).scalar_one()
+    # ... rest of logic
+```
+
+**Scoring signal**: Test suite goes from ❌ → ✅. AI-assisted teams should use Copilot to understand `SELECT FOR UPDATE` and SQLAlchemy async transactions. [kingtigerebooks.co](https://kingtigerebooks.co.uk/post/race-condition-using-fast-api-sql-alchemy-and-asyncpg)
+
+***
+
+## 🐛 Bug Challenge 2 — N+1 Query Problem on Transaction History
+
+**GitHub Issue Title**: `[BUG] /transactions/{account_id} endpoint degrading to 4–8 seconds response time`
+
+**Released**: T+60 minutes
+
+**What participants observe**: Loading the transaction history page feels fast on first load (few records), but the attached timing test fails consistently. When they check the logs, they see hundreds of individual SQL queries firing per request. The seed data includes 500+ transactions per account specifically to make this obvious. [oneuptime](https://oneuptime.com/blog/post/2026-02-02-fastapi-async-database/view)
+
+**Where the bug lives** — `backend/app/routers/transactions.py`:
+
+```python
+# ❌ BUGGY: N+1 queries — 1 query for transactions + N for categories + N for accounts
+@router.get("/transactions/{account_id}")
+async def get_transactions(account_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Transaction).where(Transaction.account_id == account_id)
+        # Missing: .options(selectinload(Transaction.category))
+        # Missing: no pagination
+        # Missing: no index on account_id column
+    )
+    transactions = result.scalars().all()
+
+    enriched = []
+    for txn in transactions:
+        category = await db.get(Category, txn.category_id)  # 🔥 N queries
+        enriched.append({
+            "id": txn.id, "amount": txn.amount,
+            "category": category.name,             # Fired separately per row
+            "date": txn.date.isoformat()
+        })
+    return enriched
+```
+
+There is also a missing index baked into the initial migration intentionally: the `transactions` table's `account_id` column has **no index**, meaning each query does a full table scan. [nashruddinamin](https://www.nashruddinamin.com/blog/how-to-use-alembic-for-database-migrations-in-your-fastapi-application)
+
+**The test** — `tests/test_transaction_performance.py`:
+
+```python
+import time, pytest
+from sqlalchemy import event
+
+query_count = 0
+
+@pytest.fixture(autouse=True)
+def count_queries(engine):
+    global query_count
+    query_count = 0
+    @event.listens_for(engine.sync_engine, "before_cursor_execute")
+    def _count(conn, cursor, statement, *args):
+        global query_count
+        query_count += 1
+    yield
+    event.remove(engine.sync_engine, "before_cursor_execute", _count)
+
+def test_transaction_list_response_time():
+    start = time.perf_counter()
+    response = client.get("/api/transactions/1", headers=auth_header)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    assert response.status_code == 200
+    assert elapsed_ms < 300, f"Too slow: {elapsed_ms:.0f}ms (N+1 queries suspected)"
+
+def test_transaction_query_count():
+    client.get("/api/transactions/1", headers=auth_header)
+    assert query_count <= 3, \
+        f"N+1 detected: {query_count} queries fired (should be ≤ 3)"
+```
+
+**The fix requires two steps**, which is what makes this non-trivial:
+1. Replace the loop with `selectinload` or `joinedload` on the relationship
+2. Write and run a new Alembic migration adding an index: `op.create_index('ix_transactions_account_id', 'transactions', ['account_id'])`
+
+**Scoring signal**: Both assertions in the test pass. Teams learn SQLAlchemy eager loading and understand the index/query relationship deeply. [youtube](https://www.youtube.com/watch?v=N9y9QkBM-Aw)
+
+***
+
+## 🐛 Bug Challenge 3 — Refresh Token Reuse Vulnerability + In-Memory Blacklist
+
+**GitHub Issue Title**: `[BUG] Security: Refresh tokens can be reused by concurrent requests + logout doesn't survive server restart`
+
+**Released**: T+90 minutes
+
+**What participants observe**: Two security test cases both fail. First, concurrent requests using the same refresh token all succeed — meaning one stolen token grants unlimited new access tokens. Second, logging out a user and then restarting the Replit server (clearing memory) makes the old token valid again. [stackoverflow](https://stackoverflow.com/questions/78718367/race-condition-using-fastapi-sqlalchemy-and-asyncpg)
+
+**Where the bug lives** — `backend/app/middleware/auth_middleware.py` and `backend/app/routers/auth.py`:
+
+```python
+# ❌ BUGGY: In-memory blacklist — wiped on every server restart
+_token_blacklist: list[str] = []   # Should be a DB table, not a module variable
+
+def blacklist_token(token: str):
+    _token_blacklist.append(token) # Not thread-safe under high concurrency
+
+def is_blacklisted(token: str) -> bool:
+    return token in _token_blacklist  # O(n) scan
+
+# ❌ BUGGY: TOCTOU race on refresh token rotation
+@router.post("/auth/refresh")
+async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    record = await db.execute(
+        select(RefreshToken).where(RefreshToken.token == body.refresh_token)
+    )
+    token_obj = record.scalar_one_or_none()
+
+    if not token_obj or token_obj.is_revoked:
+        raise HTTPException(401, "Invalid token")
+
+    # ⚠️ Window here: concurrent request reads same un-revoked token
+    await asyncio.sleep(0.005)
+
+    token_obj.is_revoked = True   # Too late — race already won
+    await db.commit()
+    return {"access_token": create_access_token(token_obj.user_id)}
+```
+
+**The test** — `tests/test_auth_security.py`:
+
+```python
+@pytest.mark.asyncio
+async def test_refresh_token_single_use_only():
+    """A refresh token must only produce ONE new access token, even under concurrency."""
+    refresh_tok = await get_refresh_token("alice@finvault.io")
+    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+        tasks = [
+            client.post("/api/auth/refresh", json={"refresh_token": refresh_tok})
+            for _ in range(6)
+        ]
+        responses = await asyncio.gather(*tasks)
+    
+    successes = [r for r in responses if r.status_code == 200]
+    assert len(successes) == 1, \
+        f"Token reuse: {len(successes)} new tokens issued from 1 refresh token"
+
+def test_logout_survives_server_restart(client):
+    token = login_and_get_token("bob@finvault.io")
+    client.post("/api/auth/logout", headers={"Authorization": f"Bearer {token}"})
+
+    # Simulate restart by clearing the in-memory list
+    import app.middleware.auth_middleware as mw
+    mw._token_blacklist.clear()   # This is exactly what a Replit restart does
+
+    response = client.get("/api/accounts", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 401, "Revoked token accepted after simulated restart"
+```
+
+**The fix requires two changes**:
+1. Create and run a new Alembic migration adding a `revoked_tokens` table (`token TEXT, revoked_at TIMESTAMP`), then update blacklist functions to read/write from DB
+2. Wrap the refresh token rotation in `SELECT FOR UPDATE` inside a transaction, same pattern as Bug #1
+
+This challenge deliberately echoes the patterns from Bugs #1 and #2 to reinforce learning. [stackoverflow](https://stackoverflow.com/questions/78718367/race-condition-using-fastapi-sqlalchemy-and-asyncpg)
+
+***
+
+## ✨ Feature Implementation 1 — Analytics Dashboard
+
+**GitHub Issue Title**: `[FEATURE] Implement spending analytics dashboard (/analytics)`
+
+**Released**: T+30 minutes (runs in parallel with bugs)
+
+**What exists already**: The frontend page `analytics.js` renders a fully styled page shell with Chart.js canvas elements, placeholder cards, and a date range picker. The backend `analytics.py` router is registered and all three endpoints exist — they return `{"detail": "Not implemented yet"}` with HTTP 200. Chart.js is already loaded via CDN.
+
+**What participants must implement**:
+
+1. **`GET /api/analytics/spending-by-category`** — Aggregate all debit transactions for the authenticated user grouped by category, returning `[{name, total, count, percentage}]`. Requires a `GROUP BY` with `func.sum()` in SQLAlchemy:
+
+```python
+# Skeleton provided — they fill in the query
+@router.get("/analytics/spending-by-category")
+async def spending_by_category(
+    start_date: date, end_date: date,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # TODO: Query transactions joined with categories,
+    # filter by user's accounts + date range + type='debit',
+    # group by category name, return totals and percentages
+    raise HTTPException(501, "Not implemented")
+```
+
+2. **`GET /api/analytics/monthly-trends`** — Monthly income vs expenditure for the last 6 months. Requires `func.strftime('%Y-%m', Transaction.date)` grouping (SQLite) or `func.date_trunc` (PostgreSQL).
+
+3. **`GET /api/analytics/budget-vs-actual`** — Join budgets table with aggregated transactions for the current period to produce `[{category, budget_limit, actual_spent, remaining, percentage_used}]`.
+
+4. **Frontend wiring** — Three Chart.js calls in `analytics.js` are stubbed. Participants must call the APIs and pass data into the existing canvas elements using Chart.js `new Chart(ctx, config)` pattern.
+
+**Why it's difficult enough**: The SQL aggregation logic, handling of empty months (zero-filling gaps), percentage calculations across categories, and correctly scoping queries to only the authenticated user's accounts requires substantial effort even with Copilot. [linkedin](https://www.linkedin.com/posts/shamsul-alam-sajib-662460201_fastapi-postgresql-flutter-activity-7377610253120684032-GzTj)
+
+***
+
+## ✨ Feature Implementation 2 — Savings Goals with Alembic Migration
+
+**GitHub Issue Title**: `[FEATURE] Implement savings goals module — complete migration and full CRUD`
+
+**Released**: T+60 minutes (runs in parallel with bugs)
+
+**What exists already**:
+- `alembic/versions/002_add_savings_goals.py` exists but is a stub with TODOs
+- `app/models/savings_goal.py` has an empty class with a `# TODO` comment
+- `frontend/src/pages/savings.js` has a full UI mockup with hard-coded dummy data — all API calls are commented out
+
+**What participants must implement**:
+
+**Step 1 — Complete the Alembic migration** (the file has the schema specification in comments as guidance):
+
+```python
+# 002_add_savings_goals.py — participants complete the upgrade() function
+def upgrade():
+    # TODO: Create savings_goals table
+    # Columns: id, user_id (FK→users), name, target_amount, current_amount,
+    #          deadline (nullable DATE), created_at, is_archived
+    # TODO: Create savings_contributions table
+    # Columns: id, goal_id (FK→savings_goals), amount, note, contributed_at
+    pass  # ← replace this
+
+def downgrade():
+    op.drop_table("savings_contributions")
+    op.drop_table("savings_goals")
+```
+
+**Step 2 — Write the SQLAlchemy models** in `models/savings_goal.py` and `models/savings_contribution.py` with the correct relationships.
+
+**Step 3 — Implement five API endpoints** in a new `routers/savings.py`:
+- `POST /savings/goals` — create a goal
+- `GET /savings/goals` — list all goals for current user with `current_amount` computed from contributions
+- `POST /savings/goals/{id}/contribute` — add a contribution (updates `current_amount` automatically)
+- `PUT /savings/goals/{id}` — edit goal name/target/deadline
+- `DELETE /savings/goals/{id}` — archive (soft delete) a goal
+
+**Step 4 — Wire the frontend** — the savings page has all UI components rendered, participants replace the hard-coded dummy arrays with live `fetch()` API calls.
+
+**Why it's difficult**: This is the only challenge that requires running a command (`alembic upgrade head`) to mutate the live database schema, then verifying the migration worked before any backend code can function. Understanding the relationship between Alembic migration files, SQLAlchemy models, and the actual SQLite file is a genuine learning experience. [youtube](https://www.youtube.com/watch?v=tQ3pmkN6FnU)
+
+***
+
+## GitHub Issues Release Timeline
+
+| Time | Issue Released | Type | Expected Duration |
+|---|---|---|---|
+| T+0 min | `[BUG] Concurrent transfers causing overdrafts` | Bug #1 | 45–60 min |
+| T+30 min | `[FEATURE] Implement analytics dashboard` | Feature #1 | 75–90 min |
+| T+60 min | `[BUG] Transaction history taking 4–8 seconds` | Bug #2 | 40–55 min |
+| T+60 min | `[FEATURE] Savings goals module + migration` | Feature #2 | 60–90 min |
+| T+90 min | `[BUG] Refresh token reuse + logout blacklist bypass` | Bug #3 | 50–70 min |
+
+Teams choose their own path — the design means a team strong on databases might tackle Feature #2 and Bug #2 simultaneously while a security-minded team might beeline Bug #3 early.
+
+***
+
+## Scoring Rubric
+
+Each completed challenge is validated by the existing test suite:
+
+| Challenge | Points | Validation |
+|---|---|---|
+| Bug #1: Race condition fixed | 25 pts | `pytest tests/test_transfer_race.py` passes |
+| Bug #2: N+1 + index fixed | 25 pts | `pytest tests/test_transaction_performance.py` passes |
+| Bug #3: Auth security fixed | 30 pts | `pytest tests/test_auth_security.py` passes |
+| Feature #1: Analytics dashboard | 20 pts | Endpoints return correct data + UI renders charts |
+| Feature #2: Savings goals + migration | 25 pts | `alembic upgrade head` succeeds + all 5 endpoints work |
+| **Bonus** | +10 pts | Additional unit tests written by team for their own fixes |
+
+***
+
+## Replit Setup Instructions (for your README)
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Set up environment
+cp .env.example .env   # Contains SECRET_KEY, DATABASE_URL=sqlite:///./finvault.db
+
+# 3. Run initial database migration
+cd backend && alembic upgrade head
+
+# 4. Seed demo data
+python seed.py
+
+# 5. Start the server
+uvicorn app.main:app --reload --port 8000
+
+# 6. Open frontend
+# In Replit: the frontend/index.html is served as static files by FastAPI
+# Navigate to http://localhost:8000
+
+# Demo login: alice@finvault.io / demo1234
+```
+
+FastAPI serves the static frontend directly via `StaticFiles` mount, meaning there is zero separate frontend server — participants only run one process. [github](https://github.com/fastapi/full-stack-fastapi-template)
+
+***
+
+## Key Design Principles Behind the Bugs
+
+All three bugs share intentional design choices that make them non-trivial:
+
+- **None are syntax errors or missing imports** — the app runs fine and looks correct on casual inspection
+- **Each bug requires understanding async concurrency, database internals, or security patterns** — exactly the depth that makes Copilot/AI useful as an analysis tool rather than a trivial autocomplete
+- **Each bug has a failing test already written** — participants don't need to write tests, they need to understand why the test fails and fix root cause
+- **Bugs #1 and #3 share the same fix pattern** (`SELECT FOR UPDATE`) applied in two different contexts — reinforcing the pattern across auth and financial domains
+- **The `asyncio.sleep()` lines are commented with `# Simulates processing delay`** — honest enough not to mislead but not flagged as a hint [reddit](https://www.reddit.com/r/FastAPI/comments/1m14r2k/when_to_worry_about_race_conditions/)
+
+
+TECH NOTES:
+Build a full-stack personal finance and banking web application called "FinVault".
+This app is for a hackathon where secondary school students will fix deliberately
+embedded bugs and implement stubbed features. The app must run fully on Replit
+AND locally without any changes to the codebase.
+
+=======================================================================
+TECH STACK — use exactly these, no substitutions
+=======================================================================
+BACKEND:
+  - Python 3.11
+  - FastAPI + Uvicorn (async)
+  - SQLAlchemy 2.0 with async engine (aiosqlite driver for SQLite)
+  - Alembic for all database migrations (stored in repo under backend/alembic/)
+  - python-jose[cryptography] for JWT access + refresh tokens
+  - passlib[bcrypt] for password hashing
+  - pytest + pytest-asyncio + httpx for the test suite
+  - Faker for seed data generation
+  - python-dotenv + pydantic-settings for config
+
+FRONTEND:
+  - Pure HTML + Tailwind CSS (loaded via CDN play.tailwindcss.com script tag)
+  - Alpine.js 3.x (loaded via CDN)
+  - Chart.js 4.x (loaded via CDN)
+  - NO React, NO Vue, NO Node.js, NO build step at all
+  - FastAPI serves the frontend as StaticFiles at the root path
+
+DATABASE:
+  - SQLite (file: finvault.db) — zero config, works on Replit and local
+  - All schema changes must be Alembic migrations, never create tables manually
+
+=======================================================================
+PROJECT FILE STRUCTURE — create exactly this layout
+=======================================================================
+
+finvault/
+├── .replit
+├── replit.nix
+├── .env.example
+├── .env                          ← copy of .env.example, created by start.sh
+├── start.sh
+├── README.md
+├── backend/
+│   ├── requirements.txt
+│   ├── pytest.ini
+│   ├── alembic.ini
+│   ├── seed.py
+│   ├── alembic/
+│   │   ├── env.py
+│   │   └── versions/
+│   │       ├── 001_initial_schema.py
+│   │       └── 002_add_savings_goals.py     ← STUB (Feature #2)
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── core/
+│   │   │   ├── __init__.py
+│   │   │   ├── security.py
+│   │   │   └── dependencies.py
+│   │   ├── middleware/
+│   │   │   ├── __init__.py
+│   │   │   └── auth_middleware.py           ← CONTAINS BUG #3
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── user.py
+│   │   │   ├── account.py
+│   │   │   ├── category.py
+│   │   │   ├── transaction.py
+│   │   │   ├── budget.py
+│   │   │   └── refresh_token.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py
+│   │   │   ├── account.py
+│   │   │   ├── transaction.py
+│   │   │   ├── transfer.py
+│   │   │   ├── budget.py
+│   │   │   └── analytics.py
+│   │   └── routers/
+│   │       ├── __init__.py
+│   │       ├── auth.py                      ← CONTAINS BUG #3 (TOCTOU)
+│   │       ├── accounts.py
+│   │       ├── transactions.py              ← CONTAINS BUG #2 (N+1 query)
+│   │       ├── transfer.py
+│   │       ├── budgets.py
+│   │       └── analytics.py                ← STUB (Feature #1)
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── transfer_service.py             ← CONTAINS BUG #1 (race condition)
+│   └── tests/
+│       ├── __init__.py
+│       ├── conftest.py
+│       ├── test_transfer_race.py
+│       ├── test_transaction_performance.py
+│       └── test_auth_security.py
+└── frontend/
+    ├── index.html
+    └── src/
+        ├── api.js
+        ├── app.js
+        └── pages/
+            ├── dashboard.js
+            ├── transactions.js
+            ├── transfer.js
+            ├── budgets.js
+            ├── analytics.js                ← STUB (Feature #1)
+            └── savings.js                  ← STUB (Feature #2)
+
+=======================================================================
+ROOT CONFIGURATION FILES
+=======================================================================
+
+--- .replit ---
+run = "bash start.sh"
+entrypoint = "start.sh"
+
+[nix]
+channel = "stable-24_05"
+
+[[ports]]
+localPort = 8000
+externalPort = 80
+
+[env]
+PYTHONPATH = "backend"
+
+--- replit.nix ---
+{ pkgs }: {
+  deps = [
+    pkgs.python311
+    pkgs.python311Packages.pip
+    pkgs.bash
+  ];
+}
+
+--- .env.example ---
+SECRET_KEY=finvault-dev-secret-change-in-production-minimum-32-chars
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+REFRESH_TOKEN_EXPIRE_DAYS=7
+DATABASE_URL=sqlite+aiosqlite:///./finvault.db
+
+--- start.sh ---
+#!/usr/bin/env bash
+set -e
+cd backend
+echo "📦 Installing dependencies..."
+pip install -r requirements.txt -q
+if [ ! -f ".env" ]; then
+  cp ../.env.example .env
+  echo "✅ Created .env from .env.example"
+fi
+echo "🗄️  Running migrations..."
+alembic upgrade head
+echo "🌱 Seeding demo data..."
+python seed.py
+echo "🚀 Starting FinVault on http://0.0.0.0:8000"
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+=======================================================================
+BACKEND — CONFIGURATION
+=======================================================================
+
+--- backend/requirements.txt ---
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+sqlalchemy[asyncio]==2.0.36
+aiosqlite==0.20.0
+alembic==1.14.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.20
+httpx==0.28.1
+pytest==8.3.4
+pytest-asyncio==0.24.0
+anyio==4.7.0
+python-dotenv==1.0.1
+faker==33.1.0
+pydantic-settings==2.7.0
+email-validator==2.2.0
+
+--- backend/pytest.ini ---
+[pytest]
+asyncio_mode = auto
+testpaths = tests
+
+--- backend/alembic.ini ---
+[alembic]
+script_location = alembic
+prepend_sys_path = .
+sqlalchemy.url = sqlite+aiosqlite:///./finvault.db
+
+[loggers]
+keys = root,sqlalchemy,alembic
+[handlers]
+keys = console
+[formatters]
+keys = generic
+[logger_root]
+level = WARN
+handlers = console
+qualname =
+[logger_sqlalchemy]
+level = WARN
+handlers =
+qualname = sqlalchemy.engine
+[logger_alembic]
+level = INFO
+handlers =
+qualname = alembic
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+[formatter_generic]
+format = %(levelname)-5.5s [%(name)s] %(message)s
+datefmt = %H:%M:%S
+
+=======================================================================
+BACKEND — app/config.py
+=======================================================================
+
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+
+class Settings(BaseSettings):
+    SECRET_KEY: str = "finvault-dev-secret-change-me"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    DATABASE_URL: str = "sqlite+aiosqlite:///./finvault.db"
+    class Config:
+        env_file = ".env"
+
+@lru_cache()
+def get_settings():
+    return Settings()
+
+settings = get_settings()
+
+=======================================================================
+BACKEND — app/database.py
+=======================================================================
+
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import DeclarativeBase
+from typing import AsyncGenerator
+from app.config import settings
+
+connect_args = {"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+engine = create_async_engine(settings.DATABASE_URL, echo=False, connect_args=connect_args)
+AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+class Base(DeclarativeBase):
+    pass
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+=======================================================================
+BACKEND — MODELS (create all 6 files)
+=======================================================================
+
+--- app/models/user.py ---
+from sqlalchemy import String, Boolean, DateTime
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
+from datetime import datetime
+from typing import List
+from app.database import Base
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    full_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    accounts: Mapped[List["Account"]] = relationship("Account", back_populates="user", cascade="all, delete-orphan")
+    budgets: Mapped[List["Budget"]] = relationship("Budget", back_populates="user", cascade="all, delete-orphan")
+    refresh_tokens: Mapped[List["RefreshToken"]] = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+
+--- app/models/account.py ---
+from sqlalchemy import String, Float, ForeignKey, Boolean
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import List
+from app.database import Base
+
+class Account(Base):
+    __tablename__ = "accounts"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    account_type: Mapped[str] = mapped_column(String(20), nullable=False, default="checking")
+    balance: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    account_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="EUR")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    user: Mapped["User"] = relationship("User", back_populates="accounts")
+    transactions: Mapped[List["Transaction"]] = relationship("Transaction", back_populates="account", cascade="all, delete-orphan")
+
+--- app/models/category.py ---
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import List
+from app.database import Base
+
+class Category(Base):
+    __tablename__ = "categories"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    icon: Mapped[str] = mapped_column(String(10), default="💰")
+    colour_hex: Mapped[str] = mapped_column(String(7), default="#6366f1")
+    transactions: Mapped[List["Transaction"]] = relationship("Transaction", back_populates="category")
+    budgets: Mapped[List["Budget"]] = relationship("Budget", back_populates="category")
+
+--- app/models/transaction.py ---
+# NOTE: account_id intentionally has NO index — this causes Bug #2
+from sqlalchemy import String, Float, ForeignKey, DateTime, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
+from datetime import datetime
+from typing import Optional
+from app.database import Base
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), nullable=False)
+    # NO index=True above — this is intentional for Bug #2
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    transaction_type: Mapped[str] = mapped_column(String(10), nullable=False)  # 'credit' | 'debit'
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    date: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    reference: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    account: Mapped["Account"] = relationship("Account", back_populates="transactions")
+    category: Mapped["Category"] = relationship("Category", back_populates="transactions")
+
+--- app/models/budget.py ---
+from sqlalchemy import Float, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.database import Base
+
+class Budget(Base):
+    __tablename__ = "budgets"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
+    limit_amount: Mapped[float] = mapped_column(Float, nullable=False)
+    period: Mapped[str] = mapped_column(String(10), default="monthly")
+    user: Mapped["User"] = relationship("User", back_populates="budgets")
+    category: Mapped["Category"] = relationship("Category", back_populates="budgets")
+
+--- app/models/refresh_token.py ---
+from sqlalchemy import String, Boolean, ForeignKey, DateTime
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
+from datetime import datetime
+from app.database import Base
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    token: Mapped[str] = mapped_column(String(512), unique=True, nullable=False, index=True)
+    is_revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    user: Mapped["User"] = relationship("User", back_populates="refresh_tokens")
+
+=======================================================================
+BACKEND — app/models/__init__.py
+=======================================================================
+
+from app.models.user import User
+from app.models.account import Account
+from app.models.category import Category
+from app.models.transaction import Transaction
+from app.models.budget import Budget
+from app.models.refresh_token import RefreshToken
+
+=======================================================================
+BACKEND — app/core/security.py
+=======================================================================
+
+from datetime import datetime, timedelta, timezone
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from app.config import settings
+import secrets
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+def create_access_token(user_id: int) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    return jwt.encode(
+        {"sub": str(user_id), "exp": expire, "type": "access"},
+        settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
+
+def create_refresh_token() -> str:
+    return secrets.token_urlsafe(64)
+
+def decode_access_token(token: str) -> dict:
+    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+
+=======================================================================
+BACKEND — app/core/dependencies.py
+=======================================================================
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from jose import JWTError
+from app.database import get_db
+from app.models.user import User
+from app.core.security import decode_access_token
+from app.middleware.auth_middleware import is_blacklisted
+
+security = HTTPBearer()
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    token = credentials.credentials
+    if is_blacklisted(token):
+        raise HTTPException(status_code=401, detail="Token has been revoked")
+    try:
+        payload = decode_access_token(token)
+        user_id = int(payload["sub"])
+    except (JWTError, ValueError, KeyError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+    result = await db.execute(select(User).where(User.id == user_id, User.is_active == True))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+=======================================================================
+BACKEND — app/middleware/auth_middleware.py
+THIS FILE CONTAINS BUG #3 — do not fix it, embed it exactly as written
+=======================================================================
+
+# ==========================================================================
+# BUG #3 — IN-MEMORY TOKEN BLACKLIST
+# ==========================================================================
+# PROBLEM 1 (Persistence): This list lives in Python process memory.
+#   Every Replit restart, every uvicorn --reload, every crash wipes it.
+#   A user who logs out gets their token revoked in memory only.
+#   After any restart that same token is valid again.
+#
+# PROBLEM 2 (Thread safety): list.append() is not safe under asyncio
+#   concurrent requests — the list can be read mid-write.
+#
+# PROBLEM 3 (Performance): `token in list` is O(n) linear scan.
+#   With thousands of revoked tokens this endpoint slows to a crawl.
+#
+# HOW PARTICIPANTS FIX IT:
+#   Step 1 — Write a new Alembic migration adding table:
+#     revoked_tokens(id PK, token TEXT UNIQUE, revoked_at TIMESTAMP)
+#   Step 2 — Replace blacklist_token() to INSERT into that table
+#   Step 3 — Replace is_blacklisted() to SELECT COUNT(*) from that table
+#   Step 4 — Run: alembic upgrade head
+# ==========================================================================
+
+_token_blacklist: list[str] = []  # ← cleared on every server restart
+
+
+def blacklist_token(token: str) -> None:
+    """Revoke an access token. WARNING: not persistent across restarts."""
+    _token_blacklist.append(token)  # not thread-safe under async concurrency
+
+
+def is_blacklisted(token: str) -> bool:
+    """Check if a token is revoked. WARNING: returns False after any restart."""
+    return token in _token_blacklist  # O(n) scan
+
+=======================================================================
+BACKEND — app/routers/auth.py
+THIS FILE CONTAINS BUG #3 (TOCTOU on refresh token rotation)
+=======================================================================
+
+import asyncio
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from pydantic import BaseModel, EmailStr
+from app.database import get_db
+from app.models.user import User
+from app.models.refresh_token import RefreshToken
+from app.core.security import (
+    hash_password, verify_password,
+    create_access_token, create_refresh_token,
+)
+from app.middleware.auth_middleware import blacklist_token
+from app.core.dependencies import get_current_user
+
+router = APIRouter(prefix="/api/auth", tags=["auth"])
+bearer = HTTPBearer()
+
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    full_name: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+@router.post("/register", status_code=201)
+async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    exists = (await db.execute(select(User).where(User.email == body.email))).scalar_one_or_none()
+    if exists:
+        raise HTTPException(400, "Email already registered")
+    user = User(email=body.email, full_name=body.full_name, hashed_password=hash_password(body.password))
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return {"message": "Account created", "user_id": user.id}
+
+
+@router.post("/login")
+async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+    if not user or not verify_password(body.password, user.hashed_password):
+        raise HTTPException(401, "Invalid credentials")
+    refresh_str = create_refresh_token()
+    db.add(RefreshToken(user_id=user.id, token=refresh_str))
+    await db.commit()
+    return {
+        "access_token": create_access_token(user.id),
+        "refresh_token": refresh_str,
+        "token_type": "bearer",
+        "user": {"id": user.id, "email": user.email, "full_name": user.full_name},
+    }
+
+
+@router.post("/refresh")
+async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    # ==========================================================================
+    # BUG #3 — TIME-OF-CHECK / TIME-OF-USE (TOCTOU) RACE CONDITION
+    # ==========================================================================
+    # Multiple concurrent requests using the same refresh token will all:
+    #   1. SELECT the token row — all read is_revoked = False (passes check)
+    #   2. Reach the asyncio.sleep() — window is now open
+    #   3. All set is_revoked = True and commit — but they already issued tokens
+    #   Result: 6 concurrent requests with one token → 6 access tokens issued
+    #
+    # HOW PARTICIPANTS FIX IT:
+    #   Wrap the entire read-check-update block in a transaction with row locking:
+    #     async with db.begin():
+    #         token_obj = (await db.execute(
+    #             select(RefreshToken)
+    #             .where(RefreshToken.token == body.refresh_token)
+    #             .with_for_update()    ← acquires row-level lock
+    #         )).scalar_one_or_none()
+    #         if not token_obj or token_obj.is_revoked:
+    #             raise HTTPException(401, "Invalid or expired refresh token")
+    #         token_obj.is_revoked = True
+    #         new_rt = RefreshToken(user_id=token_obj.user_id, token=create_refresh_token())
+    #         db.add(new_rt)
+    #         # commit happens automatically at end of `async with db.begin():`
+    # ==========================================================================
+    result = await db.execute(
+        select(RefreshToken).where(RefreshToken.token == body.refresh_token)
+    )
+    token_obj = result.scalar_one_or_none()
+
+    if not token_obj or token_obj.is_revoked:
+        raise HTTPException(401, "Invalid or expired refresh token")
+
+    await asyncio.sleep(0.005)  # Simulates token verification latency — widens race window
+
+    token_obj.is_revoked = True
+    new_refresh_str = create_refresh_token()
+    db.add(RefreshToken(user_id=token_obj.user_id, token=new_refresh_str))
+    await db.commit()
+
+    return {
+        "access_token": create_access_token(token_obj.user_id),
+        "refresh_token": new_refresh_str,
+    }
+
+
+@router.post("/logout")
+async def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    current_user: User = Depends(get_current_user),
+):
+    blacklist_token(credentials.credentials)
+    return {"message": "Logged out successfully"}
+
+
+@router.get("/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "created_at": current_user.created_at.isoformat(),
+    }
+
+=======================================================================
+BACKEND — app/routers/accounts.py
+=======================================================================
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.database import get_db
+from app.models.account import Account
+from app.core.dependencies import get_current_user
+from app.models.user import User
+
+router = APIRouter(prefix="/api/accounts", tags=["accounts"])
+
+
+@router.get("")
+async def list_accounts(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Account).where(Account.user_id == current_user.id, Account.is_active == True)
+    )
+    accounts = result.scalars().all()
+    net_worth = sum(a.balance if a.account_type != "credit" else -a.balance for a in accounts)
+    return {
+        "accounts": [
+            {
+                "id": a.id, "name": a.name, "account_type": a.account_type,
+                "balance": round(a.balance, 2),
+                "masked_number": f"****{a.account_number[-4:]}",
+                "currency": a.currency,
+            } for a in accounts
+        ],
+        "net_worth": round(net_worth, 2),
+    }
+
+
+@router.get("/{account_id}")
+async def get_account(account_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(404, "Account not found")
+    return {
+        "id": account.id, "name": account.name, "account_type": account.account_type,
+        "balance": round(account.balance, 2), "account_number": account.account_number, "currency": account.currency,
+    }
+
+=======================================================================
+BACKEND — app/routers/transactions.py
+THIS FILE CONTAINS BUG #2 — N+1 query problem + missing index
+=======================================================================
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from typing import Optional
+from app.database import get_db
+from app.models.transaction import Transaction
+from app.models.account import Account
+from app.models.category import Category
+from app.core.dependencies import get_current_user
+from app.models.user import User
+
+router = APIRouter(prefix="/api/transactions", tags=["transactions"])
+
+
+@router.get("/{account_id}")
+async def get_transactions(
+    account_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    transaction_type: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+):
+    acct = (await db.execute(
+        select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
+    )).scalar_one_or_none()
+    if not acct:
+        raise HTTPException(404, "Account not found")
+
+    # ==========================================================================
+    # BUG #2 — N+1 QUERY PROBLEM + MISSING DATABASE INDEX
+    # ==========================================================================
+    # PROBLEM 1 (N+1): This query has no eager loading (.options(selectinload(...))).
+    #   The for-loop below calls db.get(Category, txn.category_id) once per row.
+    #   For 500 transactions: 1 SELECT for transactions + 500 SELECT for categories.
+    #   Total: 501 queries per page load. Response time: 4-8 seconds.
+    #
+    # PROBLEM 2 (Missing index): transactions.account_id has no database index.
+    #   Every query on this table does a full table scan across ALL transactions
+    #   for ALL users, not just this account. This gets catastrophically slow as
+    #   the table grows.
+    #
+    # HOW PARTICIPANTS FIX IT:
+    #   Fix 1 — Add eager loading to the query:
+    #     .options(selectinload(Transaction.category))
+    #     Then replace the for-loop with direct t.category access.
+    #   Fix 2 — Write a new Alembic migration:
+    #     op.create_index('ix_transactions_account_id', 'transactions', ['account_id'])
+    #     Run: alembic upgrade head
+    #   Fix 3 — Add pagination to the query:
+    #     .offset((page - 1) * page_size).limit(page_size)
+    # ==========================================================================
+
+    query = (
+        select(Transaction)
+        .where(Transaction.account_id == account_id)
+        # MISSING: .options(selectinload(Transaction.category))
+        # MISSING: .offset((page - 1) * page_size).limit(page_size)
+        .order_by(Transaction.date.desc())
+    )
+    if transaction_type:
+        query = query.where(Transaction.transaction_type == transaction_type)
+
+    result = await db.execute(query)
+    transactions = result.scalars().all()
+
+    enriched = []
+    for txn in transactions:
+        category = await db.get(Category, txn.category_id)  # ← fires N additional queries
+        enriched.append({
+            "id": txn.id, "amount": round(txn.amount, 2),
+            "transaction_type": txn.transaction_type,
+            "description": txn.description,
+            "date": txn.date.isoformat(),
+            "reference": txn.reference,
+            "category": {
+                "id": category.id, "name": category.name,
+                "icon": category.icon, "colour_hex": category.colour_hex,
+            } if category else None,
+        })
+    return {"transactions": enriched, "total": len(enriched)}
+
+
+@router.get("/recent/all")
+async def get_recent_all(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Recent transactions across all accounts — uses selectinload correctly for contrast."""
+    account_ids = [r[0] for r in (await db.execute(
+        select(Account.id).where(Account.user_id == current_user.id)
+    )).fetchall()]
+
+    result = await db.execute(
+        select(Transaction)
+        .options(selectinload(Transaction.category))  # ← correct approach, shown for contrast
+        .where(Transaction.account_id.in_(account_ids))
+        .order_by(Transaction.date.desc())
+        .limit(limit)
+    )
+    return {
+        "transactions": [
+            {
+                "id": t.id, "amount": round(t.amount, 2),
+                "transaction_type": t.transaction_type,
+                "description": t.description,
+                "date": t.date.isoformat(),
+                "category": {"name": t.category.name, "icon": t.category.icon, "colour_hex": t.category.colour_hex} if t.category else None,
+            } for t in result.scalars().all()
+        ]
+    }
+
+=======================================================================
+BACKEND — services/transfer_service.py
+THIS FILE CONTAINS BUG #1 — race condition on concurrent transfers
+=======================================================================
+
+import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from fastapi import HTTPException
+from app.models.account import Account
+from app.models.transaction import Transaction
+from app.models.category import Category
+
+
+async def transfer_funds(
+    from_account_id: int,
+    to_account_id: int,
+    amount: float,
+    description: str,
+    db: AsyncSession,
+) -> dict:
+    """
+    Transfer funds between two accounts.
+
+    ==========================================================================
+    BUG #1 — CHECK-THEN-ACT RACE CONDITION (no row-level locking)
+    ==========================================================================
+    WHAT HAPPENS under concurrent requests:
+      Request A: reads from_account.balance = €500.00
+      Request B: reads from_account.balance = €500.00  ← same stale value
+      Request A: balance (500) >= amount (500) → passes check
+      Request B: balance (500) >= amount (500) → passes check ← BOTH PASS
+      asyncio.sleep() widens the window — control yields here
+      Request A: writes balance = 500 - 500 = €0.00
+      Request B: writes balance = 500 - 500 = €0.00  ← OVERDRAFT: -€500!
+      Both commits succeed. Account balance is now -€500.
+
+    VISIBLE SYMPTOM: Running the test fires 10 concurrent €50 transfers
+    from an account with €500. Only 10 should succeed with balance = €0,
+    but you'll see accounts go negative. The test fails with:
+      AssertionError: Race condition: final balance is -€450.00
+
+    HOW PARTICIPANTS FIX IT:
+      Acquire a row-level lock using SELECT FOR UPDATE before any read:
+
+      async with db.begin():
+          from_account = (await db.execute(
+              select(Account)
+              .where(Account.id == from_account_id)
+              .with_for_update()   ← blocks concurrent reads of this row
+          )).scalar_one_or_none()
+
+          to_account = (await db.execute(
+              select(Account)
+              .where(Account.id == to_account_id)
+              .with_for_update()
+          )).scalar_one_or_none()
+
+          # now check and update safely — no other session can read these rows
+          if from_account.balance < amount:
+              raise HTTPException(400, "Insufficient funds")
+          from_account.balance -= amount
+          to_account.balance   += amount
+          db.add(transaction_record)
+          # db.begin() context manager commits here automatically
+    ==========================================================================
+    """
+
+    if amount <= 0:
+        raise HTTPException(400, "Transfer amount must be positive")
+    if from_account_id == to_account_id:
+        raise HTTPException(400, "Cannot transfer to the same account")
+
+    # READ without any lock — race condition window is open
+    from_account = (await db.execute(
+        select(Account).where(Account.id == from_account_id)
+    )).scalar_one_or_none()
+
+    to_account = (await db.execute(
+        select(Account).where(Account.id == to_account_id)
+    )).scalar_one_or_none()
+
+    if not from_account:
+        raise HTTPException(404, "Source account not found")
+    if not to_account:
+        raise HTTPException(404, "Destination account not found")
+
+    if from_account.balance < amount:
+        raise HTTPException(400, f"Insufficient funds. Available: €{from_account.balance:.2f}")
+
+    # Simulates real-world processing latency (e.g. fraud check API call).
+    # This widens the race window significantly and makes the bug reliably reproducible.
+    await asyncio.sleep(0.010)
+
+    # WRITE — the balance read above is now stale; another request may have modified it
+    from_account.balance = round(from_account.balance - amount, 2)
+    to_account.balance = round(to_account.balance + amount, 2)
+
+    transfer_category = (await db.execute(
+        select(Category).where(Category.name == "Transfers")
+    )).scalar_one_or_none()
+
+    import secrets as _secrets
+    ref = _secrets.token_hex(6).upper()
+
+    db.add(Transaction(
+        account_id=from_account_id,
+        category_id=transfer_category.id if transfer_category else 1,
+        amount=amount,
+        transaction_type="debit",
+        description=description or f"Transfer to ****{str(to_account.account_number)[-4:]}",
+        reference=f"TRF-{ref}",
+    ))
+    db.add(Transaction(
+        account_id=to_account_id,
+        category_id=transfer_category.id if transfer_category else 1,
+        amount=amount,
+        transaction_type="credit",
+        description=description or f"Transfer from ****{str(from_account.account_number)[-4:]}",
+        reference=f"TRF-{ref}",
+    ))
+    await db.commit()
+
+    return {
+        "message": "Transfer successful",
+        "reference": f"TRF-{ref}",
+        "from_balance": from_account.balance,
+        "to_balance": to_account.balance,
+    }
+
+=======================================================================
+BACKEND — app/routers/transfer.py
+=======================================================================
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from pydantic import BaseModel
+from app.database import get_db
+from app.models.account import Account
+from app.models.user import User
+from app.core.dependencies import get_current_user
+from services.transfer_service import transfer_funds
+
+router = APIRouter(prefix="/api/transfer", tags=["transfer"])
+
+
+class TransferRequest(BaseModel):
+    from_account_id: int
+    to_account_id: int
+    amount: float
+    description: str = ""
+
+
+@router.post("")
+async def do_transfer(
+    body: TransferRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # Verify the source account belongs to the current user
+    owner_check = (await db.execute(
+        select(Account).where(
+            Account.id == body.from_account_id,
+            Account.user_id == current_user.id,
+        )
+    )).scalar_one_or_none()
+    if not owner_check:
+        raise HTTPException(403, "You do not own the source account")
+
+    return await transfer_funds(
+        from_account_id=body.from_account_id,
+        to_account_id=body.to_account_id,
+        amount=body.amount,
+        description=body.description,
+        db=db,
+    )
+
+=======================================================================
+BACKEND — app/routers/budgets.py
+=======================================================================
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
+from pydantic import BaseModel
+from datetime import date
+from app.database import get_db
+from app.models.budget import Budget
+from app.models.transaction import Transaction
+from app.models.account import Account
+from app.models.category import Category
+from app.core.dependencies import get_current_user
+from app.models.user import User
+
+router = APIRouter(prefix="/api/budgets", tags=["budgets"])
+
+
+class BudgetCreate(BaseModel):
+    category_id: int
+    limit_amount: float
+    period: str = "monthly"
+
+
+@router.get("")
+async def list_budgets(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    today = date.today()
+    start = today.replace(day=1)
+
+    budgets_result = await db.execute(
+        select(Budget)
+        .options(selectinload(Budget.category))
+        .where(Budget.user_id == current_user.id)
+    )
+    budgets = budgets_result.scalars().all()
+
+    account_ids = [r[0] for r in (await db.execute(
+        select(Account.id).where(Account.user_id == current_user.id)
+    )).fetchall()]
+
+    result = []
+    for b in budgets:
+        spent_result = await db.execute(
+            select(func.coalesce(func.sum(Transaction.amount), 0.0))
+            .where(
+                Transaction.account_id.in_(account_ids),
+                Transaction.category_id == b.category_id,
+                Transaction.transaction_type == "debit",
+                Transaction.date >= start,
+            )
+        )
+        spent = float(spent_result.scalar())
+        result.append({
+            "id": b.id, "period": b.period,
+            "limit_amount": b.limit_amount,
+            "spent": round(spent, 2),
+            "remaining": round(max(b.limit_amount - spent, 0), 2),
+            "percentage_used": round(min((spent / b.limit_amount) * 100, 100), 1) if b.limit_amount > 0 else 0,
+            "category": {"id": b.category.id, "name": b.category.name, "icon": b.category.icon, "colour_hex": b.category.colour_hex},
+        })
+    return {"budgets": result}
+
+
+@router.post("", status_code=201)
+async def create_budget(body: BudgetCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    budget = Budget(user_id=current_user.id, category_id=body.category_id, limit_amount=body.limit_amount, period=body.period)
+    db.add(budget)
+    await db.commit()
+    await db.refresh(budget)
+    return {"id": budget.id, "message": "Budget created"}
+
+
+@router.delete("/{budget_id}")
+async def delete_budget(budget_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Budget).where(Budget.id == budget_id, Budget.user_id == current_user.id))
+    budget = result.scalar_one_or_none()
+    if not budget:
+        raise HTTPException(404, "Budget not found")
+    await db.delete(budget)
+    await db.commit()
+    return {"message": "Budget deleted"}
+
+
+@router.get("/categories")
+async def list_categories(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Category))
+    categories = result.scalars().all()
+    return {"categories": [{"id": c.id, "name": c.name, "icon": c.icon, "colour_hex": c.colour_hex} for c in categories]}
+
+=======================================================================
+BACKEND — app/routers/analytics.py
+THIS IS A STUB — Feature #1. Participants implement the 3 endpoints.
+=======================================================================
+
+from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import date
+from app.database import get_db
+from app.core.dependencies import get_current_user
+from app.models.user import User
+
+router = APIRouter(prefix="/api/analytics", tags=["analytics"])
+
+# ==========================================================================
+# FEATURE #1 — ANALYTICS DASHBOARD (STUB — not implemented)
+# ==========================================================================
+# Participants must implement all three endpoints below.
+# The frontend analytics page is fully scaffolded and waiting for real data.
+# Chart.js canvases exist: #categoryChart (doughnut), #trendsChart (bar), #budgetChart (horizontal bar)
+#
+# ENDPOINT 1 — GET /api/analytics/spending-by-category
+#   Query: Sum all debit transactions for current user grouped by category name
+#   Filter by: start_date, end_date query params
+#   Return: [{ name, total, count, percentage, colour_hex, icon }]
+#   Hint: Use SQLAlchemy func.sum(), group_by(), join(Category)
+#         Scope to current user's account IDs only
+#
+# ENDPOINT 2 — GET /api/analytics/monthly-trends
+#   Query: Monthly totals for last 6 months split by transaction_type
+#   Return: [{ month (YYYY-MM), income, expenses, net }]
+#   Hint: Use func.strftime('%Y-%m', Transaction.date) for SQLite grouping
+#         Use func.date_trunc('month', ...) if on PostgreSQL
+#         Zero-fill months with no transactions
+#
+# ENDPOINT 3 — GET /api/analytics/budget-vs-actual
+#   Query: Join budgets with aggregated transactions for current period
+#   Return: [{ category, budget_limit, actual_spent, remaining, percentage_used }]
+#   Hint: Reuse budget calculation logic from budgets.py
+#         Include categories with budgets but zero spend (show as 0%)
+# ==========================================================================
+
+
+@router.get("/spending-by-category")
+async def spending_by_category(
+    start_date: date = Query(...),
+    end_date: date = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # TODO: Implement this endpoint
+    # Replace this stub with the real aggregation query
+    raise HTTPException(501, "Not implemented — this is Feature #1. See the comments above for guidance.")
+
+
+@router.get("/monthly-trends")
+async def monthly_trends(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # TODO: Implement this endpoint
+    raise HTTPException(501, "Not implemented — this is Feature #1. See the comments above for guidance.")
+
+
+@router.get("/budget-vs-actual")
+async def budget_vs_actual(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # TODO: Implement this endpoint
+    raise HTTPException(501, "Not implemented — this is Feature #1. See the comments above for guidance.")
+
+=======================================================================
+BACKEND — app/main.py
+=======================================================================
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pathlib import Path
+
+from app.routers import auth, accounts, transactions, transfer, budgets, analytics
+
+app = FastAPI(
+    title="FinVault API",
+    description="Personal Finance & Banking Platform — Hackathon Edition",
+    version="1.0.0",
+)
+
+# Register all API routers
+app.include_router(auth.router)
+app.include_router(accounts.router)
+app.include_router(transactions.router)
+app.include_router(transfer.router)
+app.include_router(budgets.router)
+app.include_router(analytics.router)
+
+# Serve frontend static files
+frontend_path = Path(__file__).parent.parent.parent / "frontend"
+app.mount("/src", StaticFiles(directory=str(frontend_path / "src")), name="src")
+
+@app.get("/", include_in_schema=False)
+async def serve_index():
+    return FileResponse(str(frontend_path / "index.html"))
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def catch_all(full_path: str):
+    # SPA fallback — return index.html for all non-API routes
+    return FileResponse(str(frontend_path / "index.html"))
+
+=======================================================================
+BACKEND — alembic/env.py
+=======================================================================
+
+import asyncio
+from logging.config import fileConfig
+from sqlalchemy import pool
+from sqlalchemy.ext.asyncio import async_engine_from_config
+from alembic import context
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.database import Base
+from app.models import User, Account, Category, Transaction, Budget, RefreshToken
+
+config = context.config
+
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+target_metadata = Base.metadata
+
+
+def run_migrations_offline() -> None:
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(url=url, target_metadata=target_metadata, literal_binds=True, dialect_opts={"paramstyle": "named"})
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def do_run_migrations(connection):
+    context.configure(connection=connection, target_metadata=target_metadata)
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def run_migrations_online() -> None:
+    connectable = async_engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
+    await connectable.dispose()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    asyncio.run(run_migrations_online())
+
+=======================================================================
+BACKEND — alembic/versions/001_initial_schema.py
+=======================================================================
+
+"""Initial schema
+
+Revision ID: 001
+Revises:
+Create Date: 2026-01-01
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = "001"
+down_revision = None
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "users",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("email", sa.String(255), nullable=False, unique=True),
+        sa.Column("full_name", sa.String(100), nullable=False),
+        sa.Column("hashed_password", sa.String(255), nullable=False),
+        sa.Column("is_active", sa.Boolean, default=True),
+        sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
+    )
+    op.create_index("ix_users_email", "users", ["email"], unique=True)
+
+    op.create_table(
+        "categories",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("name", sa.String(50), nullable=False, unique=True),
+        sa.Column("icon", sa.String(10), default="💰"),
+        sa.Column("colour_hex", sa.String(7), default="#6366f1"),
+    )
+
+    op.create_table(
+        "accounts",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("user_id", sa.Integer, sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("name", sa.String(100), nullable=False),
+        sa.Column("account_type", sa.String(20), default="checking"),
+        sa.Column("balance", sa.Float, default=0.0),
+        sa.Column("account_number", sa.String(20), unique=True, nullable=False),
+        sa.Column("currency", sa.String(3), default="EUR"),
+        sa.Column("is_active", sa.Boolean, default=True),
+    )
+    op.create_index("ix_accounts_user_id", "accounts", ["user_id"])
+
+    op.create_table(
+        "transactions",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("account_id", sa.Integer, sa.ForeignKey("accounts.id"), nullable=False),
+        # NOTE: No index on account_id — this is intentional for Bug #2
+        sa.Column("category_id", sa.Integer, sa.ForeignKey("categories.id"), nullable=False),
+        sa.Column("amount", sa.Float, nullable=False),
+        sa.Column("transaction_type", sa.String(10), nullable=False),
+        sa.Column("description", sa.Text, default=""),
+        sa.Column("date", sa.DateTime, nullable=False, server_default=sa.func.now()),
+        sa.Column("reference", sa.String(50), nullable=True),
+    )
+
+    op.create_table(
+        "budgets",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("user_id", sa.Integer, sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("category_id", sa.Integer, sa.ForeignKey("categories.id"), nullable=False),
+        sa.Column("limit_amount", sa.Float, nullable=False),
+        sa.Column("period", sa.String(10), default="monthly"),
+    )
+    op.create_index("ix_budgets_user_id", "budgets", ["user_id"])
+
+    op.create_table(
+        "refresh_tokens",
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("user_id", sa.Integer, sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("token", sa.String(512), nullable=False, unique=True),
+        sa.Column("is_revoked", sa.Boolean, default=False),
+        sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
+    )
+    op.create_index("ix_refresh_tokens_token", "refresh_tokens", ["token"], unique=True)
+
+
+def downgrade() -> None:
+    op.drop_table("refresh_tokens")
+    op.drop_table("budgets")
+    op.drop_table("transactions")
+    op.drop_table("accounts")
+    op.drop_table("categories")
+    op.drop_table("users")
+
+=======================================================================
+BACKEND — alembic/versions/002_add_savings_goals.py
+THIS IS A STUB — Feature #2. Participants write upgrade() function.
+=======================================================================
+
+"""Add savings goals tables
+
+Revision ID: 002
+Revises: 001
+Create Date: 2026-01-01
+
+FEATURE #2 — SAVINGS GOALS MODULE
+===========================================================================
+This migration is intentionally incomplete. The upgrade() function has a
+pass statement. Participants must complete it.
+
+The savings_goals table should have these columns:
+  id           INTEGER PRIMARY KEY
+  user_id      INTEGER FK → users.id  NOT NULL
+  name         VARCHAR(100) NOT NULL
+  target_amount   FLOAT NOT NULL
+  current_amount  FLOAT NOT NULL DEFAULT 0.0
+  deadline     DATE  NULLABLE
+  created_at   DATETIME server_default now()
+  is_archived  BOOLEAN DEFAULT False
+
+The savings_contributions table should have these columns:
+  id              INTEGER PRIMARY KEY
+  goal_id         INTEGER FK → savings_goals.id  NOT NULL
+  amount          FLOAT NOT NULL
+  note            TEXT NULLABLE
+  contributed_at  DATETIME server_default now()
+
+After completing the migration, participants must also:
+  1. Create app/models/savings_goal.py with SQLAlchemy models
+  2. Create app/models/savings_contribution.py with SQLAlchemy model
+  3. Create app/routers/savings.py with 5 endpoints:
+       POST   /api/savings/goals           — create goal
+       GET    /api/savings/goals           — list goals with computed progress
+       POST   /api/savings/goals/{id}/contribute — add contribution
+       PUT    /api/savings/goals/{id}      — edit goal
+       DELETE /api/savings/goals/{id}      — soft delete (set is_archived=True)
+  4. Register the router in app/main.py
+  5. Wire up the savings.js frontend (replace hardcoded dummy data with fetch calls)
+  6. Run: alembic upgrade head
+===========================================================================
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = "002"
+down_revision = "001"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    pass  # TODO: Implement this — see the instructions above
+
+
+def downgrade() -> None:
+    op.drop_table("savings_contributions")
+    op.drop_table("savings_goals")
+
+=======================================================================
+BACKEND — seed.py
+=======================================================================
+
+import asyncio
+from datetime import datetime, timedelta
+from faker import Faker
+from sqlalchemy import select
+import random
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from app.database import AsyncSessionLocal
+from app.models.user import User
+from app.models.account import Account
+from app.models.category import Category
+from app.models.transaction import Transaction
+from app.models.budget import Budget
+from app.core.security import hash_password
+
+fake = Faker("en_IE")
+
+CATEGORIES = [
+    ("Groceries", "🛒", "#10b981"),
+    ("Dining Out", "🍽️", "#f59e0b"),
+    ("Transport", "🚌", "#3b82f6"),
+    ("Utilities", "💡", "#8b5cf6"),
+    ("Entertainment", "🎬", "#ec4899"),
+    ("Healthcare", "🏥", "#ef4444"),
+    ("Shopping", "🛍️", "#f97316"),
+    ("Rent", "🏠", "#6366f1"),
+    ("Salary", "💼", "#22c55e"),
+    ("Transfers", "↔️", "#64748b"),
+    ("Savings", "🏦", "#0ea5e9"),
+    ("Education", "📚", "#a855f7"),
+]
+
+DEMO_USERS = [
+    ("alice@finvault.io", "Alice Murphy", "demo1234"),
+    ("bob@finvault.io",   "Bob O'Brien",  "demo1234"),
+    ("charlie@finvault.io", "Charlie Walsh", "demo1234"),
+]
+
+
+async def seed():
+    async with AsyncSessionLocal() as db:
+        # Check if already seeded
+        existing = (await db.execute(select(User).where(User.email == "alice@finvault.io"))).scalar_one_or_none()
+        if existing:
+            print("✅ Database already seeded — skipping")
+            return
+
+        # Seed categories
+        categories = []
+        for name, icon, colour in CATEGORIES:
+            cat = Category(name=name, icon=icon, colour_hex=colour)
+            db.add(cat)
+            categories.append(cat)
+        await db.flush()
+
+        salary_cat = next(c for c in categories if c.name == "Salary")
+        expense_cats = [c for c in categories if c.name not in ("Salary", "Transfers", "Savings")]
+
+        for email, full_name, password in DEMO_USERS:
+            user = User(email=email, full_name=full_name, hashed_password=hash_password(password))
+            db.add(user)
+            await db.flush()
+
+            # Create accounts
+            checking = Account(
+                user_id=user.id, name="Current Account",
+                account_type="checking",
+                balance=round(random.uniform(800, 4000), 2),
+                account_number=f"IE{fake.numerify('##')}{fake.numerify('############')}",
+            )
+            savings = Account(
+                user_id=user.id, name="Savings Account",
+                account_type="savings",
+                balance=round(random.uniform(2000, 15000), 2),
+                account_number=f"IE{fake.numerify('##')}{fake.numerify('############')}",
+            )
+            credit = Account(
+                user_id=user.id, name="Credit Card",
+                account_type="credit",
+                balance=round(random.uniform(100, 2500), 2),
+                account_number=f"4{fake.numerify('###')}{fake.numerify('############')}",
+            )
+            db.add_all([checking, savings, credit])
+            await db.flush()
+
+            # Generate 500 transactions spread over last 12 months
+            for i in range(500):
+                days_ago = random.randint(0, 365)
+                txn_date = datetime.now() - timedelta(days=days_ago)
+                is_credit = random.random() < 0.15  # 15% income, 85% expenses
+
+                if is_credit:
+                    cat = salary_cat
+                    amount = round(random.uniform(1800, 3500), 2)
+                    desc = random.choice(["Monthly Salary", "Freelance Payment", "Bonus", "Refund"])
+                else:
+                    cat = random.choice(expense_cats)
+                    amount = round(random.uniform(3, 280), 2)
+                    desc = fake.company() if cat.name == "Shopping" else fake.bs().title()
+
+                account = random.choice([checking, savings])
+                db.add(Transaction(
+                    account_id=account.id,
+                    category_id=cat.id,
+                    amount=amount,
+                    transaction_type="credit" if is_credit else "debit",
+                    description=desc,
+                    date=txn_date,
+                    reference=f"REF{fake.numerify('########')}",
+                ))
+
+            # Seed budgets
+            for cat in random.sample(expense_cats, 5):
+                db.add(Budget(
+                    user_id=user.id,
+                    category_id=cat.id,
+                    limit_amount=round(random.uniform(100, 600), 2),
+                    period="monthly",
+                ))
+
+        await db.commit()
+        print("✅ Seeded 3 users, 1500 transactions, 15 budgets, 12 categories")
+
+if __name__ == "__main__":
+    asyncio.run(seed())
+
+=======================================================================
+BACKEND — tests/conftest.py
+=======================================================================
+
+import asyncio
+import pytest
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from app.main import app
+from app.database import Base, get_db
+
+TEST_DATABASE_URL = "sqlite+aiosqlite:///./test_finvault.db"
+test_engine = create_async_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+TestSessionLocal = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def setup_test_db():
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest_asyncio.fixture
+async def db_session():
+    async with TestSessionLocal() as session:
+        yield session
+
+
+async def override_get_db():
+    async with TestSessionLocal() as session:
+        yield session
+
+app.dependency_overrides[get_db] = override_get_db
+
+
+@pytest_asyncio.fixture
+async def client():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        yield c
+
+
+@pytest_asyncio.fixture
+async def auth_headers(client):
+    """Returns auth headers for alice@finvault.io after seeding one user."""
+    from app.models.user import User
+    from app.models.account import Account
+    from app.models.category import Category
+    from app.core.security import hash_password
+
+    async with TestSessionLocal() as db:
+        cat = Category(name="Transfers", icon="↔️", colour_hex="#64748b")
+        db.add(cat)
+        await db.flush()
+        user = User(email="alice@finvault.io", full_name="Alice Test", hashed_password=hash_password("demo1234"))
+        db.add(user)
+        await db.flush()
+        checking = Account(user_id=user.id, name="Checking", account_type="checking", balance=1000.0, account_number="IE001234567890")
+        savings  = Account(user_id=user.id, name="Savings",  account_type="savings",  balance=500.0,  account_number="IE009876543210")
+        db.add_all([checking, savings])
+        await db.commit()
+
+    resp = await client.post("/api/auth/login", json={"email": "alice@finvault.io", "password": "demo1234"})
+    token = resp.json()["access_token"]
+    return {"Authorization": f"Bearer {token}", "account_ids": [checking.id, savings.id]}
+
+=======================================================================
+BACKEND — tests/test_transfer_race.py  (BUG #1 test — must fail initially)
+=======================================================================
+
+import asyncio
+import pytest
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy import select
+from app.main import app
+from app.models.account import Account
+from tests.conftest import TestSessionLocal
+
+
+async def get_balance(account_id: int) -> float:
+    async with TestSessionLocal() as db:
+        result = await db.execute(select(Account).where(Account.id == account_id))
+        acc = result.scalar_one_or_none()
+        return acc.balance if acc else 0.0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_transfers_no_overdraft(auth_headers, client):
+    """
+    Account starts at €1000. Fire 20 concurrent €100 transfers.
+    Only 10 should succeed (€1000 / €100 = 10).
+    Final balance MUST be >= 0. This test FAILS with Bug #1 present.
+    """
+    account_ids = auth_headers["account_ids"]
+    from_id, to_id = account_ids[0], account_ids[1]
+
+    initial_balance = await get_balance(from_id)
+    expected_max_successes = int(initial_balance // 100)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        tasks = [
+            c.post(
+                "/api/transfer",
+                json={"from_account_id": from_id, "to_account_id": to_id, "amount": 100.0},
+                headers={"Authorization": auth_headers["Authorization"]},
+            )
+            for _ in range(20)
+        ]
+        responses = await asyncio.gather(*tasks)
+
+    final_balance = await get_balance(from_id)
+
+    assert final_balance >= 0, (
+        f"RACE CONDITION DETECTED: Final balance is €{final_balance:.2f} — overdraft occurred.\n"
+        f"Started with €{initial_balance:.2f}, expected final balance ≥ €0.00.\n"
+        f"FIX: Use SELECT FOR UPDATE inside db.begin() in transfer_service.py"
+    )
+
+    successes = sum(1 for r in responses if r.status_code == 200)
+    assert successes <= expected_max_successes, (
+        f"Too many transfers succeeded: {successes} (max should be {expected_max_successes}).\n"
+        f"This indicates the balance check is not atomic."
+    )
+
+=======================================================================
+BACKEND — tests/test_transaction_performance.py (BUG #2 test)
+=======================================================================
+
+import time
+import pytest
+from sqlalchemy import event
+from tests.conftest import test_engine
+
+query_log = []
+
+
+@pytest.fixture(autouse=True)
+def track_queries():
+    query_log.clear()
+
+    def before_execute(conn, clauseelement, multiparams, params, execution_options):
+        query_log.append(str(clauseelement)[:80])
+
+    event.listen(test_engine.sync_engine, "before_execute", before_execute)
+    yield
+    event.remove(test_engine.sync_engine, "before_execute", before_execute)
+
+
+@pytest.mark.asyncio
+async def test_transaction_list_under_300ms(auth_headers, client):
+    """
+    GET /transactions/{account_id} must respond in under 300ms.
+    With Bug #2 (N+1 queries) this will take 3-8 seconds. Test will FAIL.
+    FIX: Add .options(selectinload(Transaction.category)) to the query
+         and add an Alembic migration with an index on account_id.
+    """
+    account_id = auth_headers["account_ids"][0]
+    headers = {"Authorization": auth_headers["Authorization"]}
+
+    start = time.perf_counter()
+    response = await client.get(f"/api/transactions/{account_id}", headers=headers)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    assert response.status_code == 200
+    assert elapsed_ms < 300, (
+        f"PERFORMANCE BUG: Request took {elapsed_ms:.0f}ms (limit: 300ms).\n"
+        f"N+1 queries suspected. Total queries fired: {len(query_log)}.\n"
+        f"FIX: Use .options(selectinload(Transaction.category)) in transactions.py\n"
+        f"     and add an Alembic index migration on transactions.account_id"
+    )
+
+
+@pytest.mark.asyncio
+async def test_query_count_not_n_plus_1(auth_headers, client):
+    """
+    Fetching transactions should fire at most 3 queries total.
+    With Bug #2, it fires 1 + N queries (one per transaction row).
+    """
+    account_id = auth_headers["account_ids"][0]
+    headers = {"Authorization": auth_headers["Authorization"]}
+
+    await client.get(f"/api/transactions/{account_id}", headers=headers)
+
+    assert len(query_log) <= 3, (
+        f"N+1 QUERY DETECTED: {len(query_log)} queries fired for one request.\n"
+        f"Should be ≤ 3 queries. First 5 queries:\n" +
+        "\n".join(query_log[:5])
+    )
+
+=======================================================================
+BACKEND — tests/test_auth_security.py (BUG #3 test)
+=======================================================================
+
+import asyncio
+import pytest
+from httpx import AsyncClient, ASGITransport
+from app.main import app
+import app.middleware.auth_middleware as mw
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_single_use_only(client):
+    """
+    One refresh token must only produce ONE new access token even under concurrency.
+    With Bug #3 (TOCTOU), all 6 concurrent requests will succeed.
+    FIX: Use SELECT FOR UPDATE inside db.begin() in auth.py /refresh endpoint.
+    """
+    await client.post("/api/auth/register", json={
+        "email": "sectest@finvault.io", "full_name": "Security Test", "password": "testpass123"
+    })
+    login_resp = await client.post("/api/auth/login", json={"email": "sectest@finvault.io", "password": "testpass123"})
+    refresh_token = login_resp.json()["refresh_token"]
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        tasks = [
+            c.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+            for _ in range(6)
+        ]
+        responses = await asyncio.gather(*tasks)
+
+    successes = [r for r in responses if r.status_code == 200]
+    assert len(successes) == 1, (
+        f"SECURITY BUG: {len(successes)} access tokens issued from ONE refresh token.\n"
+        f"A stolen refresh token can be reused {len(successes)} times.\n"
+        f"FIX: Wrap the refresh endpoint logic in SELECT FOR UPDATE inside db.begin()"
+    )
+
+
+@pytest.mark.asyncio
+async def test_logout_survives_server_restart(client):
+    """
+    A revoked access token must be rejected even after a simulated server restart.
+    With Bug #3 (in-memory blacklist), clearing the list makes the token valid again.
+    FIX: Store revoked tokens in a database table, not a Python list.
+    """
+    await client.post("/api/auth/register", json={
+        "email": "restarttest@finvault.io", "full_name": "Restart Test", "password": "testpass123"
+    })
+    login_resp = await client.post("/api/auth/login", json={"email": "restarttest@finvault.io", "password": "testpass123"})
+    access_token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # Logout — token should now be revoked
+    await client.post("/api/auth/logout", headers=headers)
+
+    # Simulate server restart — clears the in-memory list
+    mw._token_blacklist.clear()
+
+    # Token should still be rejected even after the "restart"
+    response = await client.get("/api/accounts", headers=headers)
+    assert response.status_code == 401, (
+        f"SECURITY BUG: Revoked token accepted after simulated server restart.\n"
+        f"The in-memory blacklist was cleared (simulating a restart) and the token became valid again.\n"
+        f"FIX: Store revoked tokens in a database table so they survive restarts."
+    )
+
+=======================================================================
+FRONTEND — index.html
+=======================================================================
+
+Build a single index.html that:
+
+1. Loads in <head>:
+   - Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
+   - Chart.js: <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+   - Alpine.js: <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+2. Tailwind config in a <script> tag:
+   tailwind.config = {
+     theme: {
+       extend: {
+         colors: {
+           finvault: { 50:'#f0f4ff', 100:'#e0e9ff', 500:'#4f6ef7', 600:'#3d5bf5', 700:'#2d4ae8', 900:'#1a2d8f' }
+         }
+       }
+     }
+   }
+
+3. A full dashboard shell with:
+   - Left sidebar (260px wide, dark navy #0f172a background) with:
+       - FinVault logo at top (vault emoji + bold text)
+       - Navigation links: Dashboard, Transactions, Transfer, Budgets, Analytics, Savings
+       - Each nav item has an icon (emoji is fine), label, and active state highlight
+       - User info at the bottom (name + email + logout button)
+   - Top bar with page title + a notification bell icon
+   - Main content area (flex-1, scrollable)
+
+4. Auth screens (login + register) that show when user is not authenticated:
+   - Full-page centered card design
+   - Switch between login/register form
+   - Clean form inputs with labels, validation errors shown inline
+   - "FinVault" branding at top with tagline "Your finances. Simplified."
+
+5. Use Alpine.js x-show and x-if to toggle between:
+   - Auth view (when no token in localStorage)
+   - Dashboard shell with sidebar (when authenticated)
+
+6. Load page scripts dynamically. In the <body> include these script tags at bottom:
+   <script src="/src/api.js"></script>
+   <script src="/src/app.js"></script>
+   <script src="/src/pages/dashboard.js"></script>
+   <script src="/src/pages/transactions.js"></script>
+   <script src="/src/pages/transfer.js"></script>
+   <script src="/src/pages/budgets.js"></script>
+   <script src="/src/pages/analytics.js"></script>
+   <script src="/src/pages/savings.js"></script>
+
+The UI must look polished and professional — inspired by modern fintech apps like Revolut or Monzo:
+  - Card components with subtle shadows (shadow-sm border border-gray-100)
+  - Stat cards showing balance, income, expenses with colored indicators
+  - Green for credit amounts, red for debit amounts
+  - Account type badges (checking=blue, savings=green, credit=orange)
+  - Tailwind classes throughout — no custom CSS files
+  - Fully mobile-responsive sidebar (collapses on mobile)
+
+=======================================================================
+FRONTEND — src/api.js
+=======================================================================
+
+Write a centralised API client module using vanilla JS:
+
+const API_BASE = "/api";
+
+function getToken() { return localStorage.getItem("finvault_token"); }
+function setTokens(access, refresh) {
+  localStorage.setItem("finvault_token", access);
+  localStorage.setItem("finvault_refresh", refresh);
+}
+function clearTokens() {
+  localStorage.removeItem("finvault_token");
+  localStorage.removeItem("finvault_refresh");
+}
+
+async function apiFetch(path, options = {}) {
+  const headers = { "Content-Type": "application/json", ...options.headers };
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+  if (response.status === 401) {
+    // Attempt token refresh, then retry once
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      headers["Authorization"] = `Bearer ${getToken()}`;
+      return fetch(`${API_BASE}${path}`, { ...options, headers });
+    } else {
+      clearTokens();
+      window.dispatchEvent(new CustomEvent("finvault:logout"));
+      throw new Error("Session expired");
+    }
+  }
+
+  return response;
+}
+
+async function tryRefreshToken() {
+  const rt = localStorage.getItem("finvault_refresh");
+  if (!rt) return false;
+  try {
+    const r = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: rt }),
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    setTokens(data.access_token, data.refresh_token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Expose global helpers
+window.FinVaultAPI = {
+  get:    (path)         => apiFetch(path),
+  post:   (path, body)   => apiFetch(path, { method: "POST", body: JSON.stringify(body) }),
+  put:    (path, body)   => apiFetch(path, { method: "PUT", body: JSON.stringify(body) }),
+  delete: (path)         => apiFetch(path, { method: "DELETE" }),
+  setTokens, clearTokens, getToken,
+};
+
+=======================================================================
+FRONTEND — src/app.js
+=======================================================================
+
+Write the Alpine.js root application store using Alpine.store():
+
+document.addEventListener("alpine:init", () => {
+  Alpine.store("app", {
+    // Auth state
+    isAuthenticated: !!localStorage.getItem("finvault_token"),
+    user: JSON.parse(localStorage.getItem("finvault_user") || "null"),
+    showRegister: false,
+
+    // Navigation
+    currentPage: "dashboard",
+    sidebarOpen: true,
+
+    // Login form
+    loginForm: { email: "", password: "", loading: false, error: "" },
+
+    // Register form
+    registerForm: { email: "", full_name: "", password: "", loading: false, error: "" },
+
+    // Notification state
+    notification: { show: false, message: "", type: "success" },
+
+    async login() {
+      this.loginForm.loading = true;
+      this.loginForm.error = "";
+      try {
+        const r = await FinVaultAPI.post("/auth/login", {
+          email: this.loginForm.email,
+          password: this.loginForm.password,
+        });
+        if (!r.ok) {
+          const d = await r.json();
+          this.loginForm.error = d.detail || "Invalid credentials";
+          return;
+        }
+        const data = await r.json();
+        FinVaultAPI.setTokens(data.access_token, data.refresh_token);
+        localStorage.setItem("finvault_user", JSON.stringify(data.user));
+        this.user = data.user;
+        this.isAuthenticated = true;
+        this.currentPage = "dashboard";
+      } catch (e) {
+        this.loginForm.error = "Connection error. Is the server running?";
+      } finally {
+        this.loginForm.loading = false;
+      }
+    },
+
+    async logout() {
+      try { await FinVaultAPI.post("/auth/logout", {}); } catch {}
+      FinVaultAPI.clearTokens();
+      localStorage.removeItem("finvault_user");
+      this.isAuthenticated = false;
+      this.user = null;
+      this.currentPage = "dashboard";
+    },
+
+    navigate(page) {
+      this.currentPage = page;
+    },
+
+    notify(message, type = "success") {
+      this.notification = { show: true, message, type };
+      setTimeout(() => { this.notification.show = false; }, 3500);
+    }
+  });
+
+  window.addEventListener("finvault:logout", () => {
+    Alpine.store("app").isAuthenticated = false;
+  });
+});
+
+=======================================================================
+FRONTEND — src/pages/dashboard.js
+=======================================================================
+
+Write the dashboard Alpine.js component as a global function window.dashboardPage():
+
+- On init: fetch GET /api/accounts and GET /api/transactions/recent/all (limit=8)
+- Display: net worth card, one card per account showing balance and masked number,
+  8 most recent transactions with category icon, description, amount (green/red), date
+- Show loading skeletons (animated pulse divs) while fetching
+- Show empty states with friendly message if no data
+- Handle errors gracefully (show error banner)
+- Format currency as €X,XXX.XX using Intl.NumberFormat('en-IE', {style:'currency', currency:'EUR'})
+- Format dates as "12 Feb" using Intl.DateTimeFormat
+
+=======================================================================
+FRONTEND — src/pages/transactions.js
+=======================================================================
+
+Write the transactions Alpine.js page component as window.transactionsPage():
+
+- On init: load accounts list, set first account as selected
+- When account changes: fetch GET /api/transactions/{account_id}
+- Show a filterable table with columns: Date, Description, Category (icon + name), Amount, Type badge
+- Type filter dropdown: All / Credits / Debits
+- Show transaction count and total credit/debit amounts in a summary bar above the table
+- Paginate results client-side (50 per page) with prev/next buttons
+- Loading state while fetching
+
+=======================================================================
+FRONTEND — src/pages/transfer.js
+=======================================================================
+
+Write the transfer Alpine.js page component as window.transferPage():
+
+- Form fields: From Account (select from user's accounts), To Account (select from all accounts including other users'), Amount (number input with € prefix), Description (optional text)
+- On submit: POST /api/transfer with the form data
+- Show confirmation modal before executing: "Transfer €X from [From Account] to [To Account]?"
+- On success: show success notification with reference number, reset form, refresh account balances
+- On error: show inline error message (especially "Insufficient funds")
+- Disable submit button while loading
+
+=======================================================================
+FRONTEND — src/pages/budgets.js
+=======================================================================
+
+Write the budgets Alpine.js page component as window.budgetsPage():
+
+- On init: fetch GET /api/budgets and GET /api/budgets/categories
+- Display each budget as a card with: category icon + name, progress bar (coloured red if >80% used),
+  "€X spent of €Y limit" text, remaining amount, delete button
+- Add budget form: category dropdown, limit amount, period (monthly/weekly)
+- On create: POST /api/budgets then refresh list
+- Progress bar colour: green <60%, amber 60-80%, red >80%
+- Empty state: "No budgets yet. Create one to start tracking your spending."
+
+=======================================================================
+FRONTEND — src/pages/analytics.js  ← FEATURE #1 STUB
+=======================================================================
+
+Write the analytics page as window.analyticsPage() with this STUB structure:
+
+- Three chart canvases already rendered in the HTML:
+    <canvas id="categoryChart">   — doughnut chart
+    <canvas id="trendsChart">     — bar chart
+    <canvas id="budgetChart">     — horizontal bar chart
+- Date range picker (start/end date inputs) defaulting to current month
+- On init: call all three API endpoints
+- Each call is wrapped in try/catch that catches the 501 Not Implemented response
+  and shows a placeholder card with message:
+  "📊 Analytics not yet implemented — this is Feature #1 of the hackathon.
+   Implement the three /api/analytics endpoints to bring these charts to life."
+- The chart initialisation code IS written but receives no data yet
+- When endpoints return real data, the charts render automatically
+- Participants must implement the backend endpoints — the frontend wiring is done for them
+
+=======================================================================
+FRONTEND — src/pages/savings.js  ← FEATURE #2 STUB
+=======================================================================
+
+Write the savings page as window.savingsPage() with this STUB structure:
+
+- Hard-coded dummy goals array shown as fully styled cards:
+  [
+    { name: "Emergency Fund", target: 5000, current: 2300, deadline: "2026-06-01" },
+    { name: "Holiday to Japan", target: 3000, current: 800, deadline: "2026-12-01" },
+    { name: "New Laptop", target: 1500, current: 1500, deadline: null },
+  ]
+- Each card shows: goal name, circular progress ring (CSS only), current/target amounts,
+  deadline date (or "No deadline"), "Add Contribution" button (non-functional, just console.log)
+- "New Goal" button that shows a modal form (non-functional for now)
+- Large banner at the top of the page in amber:
+  "🚧 Savings Goals — Feature #2: The UI is ready but all data is hardcoded.
+   Complete the Alembic migration in 002_add_savings_goals.py, create the SQLAlchemy models,
+   implement the 5 API endpoints in a new savings.py router, then replace the dummy data
+   with real API calls."
+- All API calls are commented out with TODO markers showing what they should call
+
+=======================================================================
+ALEMBIC — migrations must target SQLite but be PostgreSQL-ready
+Write env.py to use async engine with asyncio.run() pattern
+Include all model imports in env.py so autogenerate works correctly
+=======================================================================
+
+=======================================================================
+ADDITIONAL REQUIREMENTS
+=======================================================================
+
+1. CORS: Add CORSMiddleware to main.py allowing all origins for local dev:
+   allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+
+2. ERROR HANDLING: All router endpoints must return consistent error JSON:
+   {"detail": "human readable message"}
+
+3. STARTUP: On app startup, log to console:
+   "FinVault API started | Docs: http://localhost:8000/docs | DB: {DATABASE_URL}"
+
+4. The app must work with a single `bash start.sh` command from repo root.
+   No manual steps required. start.sh handles: install deps → migrate → seed → serve.
+
+5. When seed.py runs and data already exists, it must skip silently (idempotent).
+
+6. All Python files must have proper __init__.py files in every package directory.
+
+7. The test suite must be runnable with `cd backend && pytest tests/ -v`
+   Tests for Bug #1, #2, #3 must FAIL before fixes are applied.
+   Tests must PASS after correct fixes.
+
+8. README must include:
+   - Local setup instructions (3 commands)
+   - Replit setup instructions (1 click)
+   - Demo credentials table
+   - API docs URL
+   - How to run tests
+   - Brief description of each hackathon challenge
+
+9. API docs (/docs) must be accessible and show all endpoints grouped by tag.
+
+10. The frontend must work on mobile screens — sidebar collapses to a hamburger menu
+    on screens smaller than 768px.
+
+=======================================================================
+BUILD THIS COMPLETE APPLICATION NOW. Do not skip any file.
+Do not use placeholder comments like "# implement this later".
+Every working feature must be fully implemented.
+Only the three BUG files and two FEATURE STUB files should have
+intentional incomplete code — and those must have the exact comment
+blocks shown above explaining the bug and how to fix it.
+=======================================================================
